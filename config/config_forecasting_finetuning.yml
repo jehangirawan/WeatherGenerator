@@ -8,19 +8,6 @@
 # nor does it submit to any jurisdiction.
 
 freeze_modules: ".*global.*|.*local.*|.*adapter.*|.*q_cells.*|.*latent.*|.*ERA5.*"
-<<<<<<< HEAD
-=======
-load_chkpt: {}
-
-norm_type: "LayerNorm"
-
-#####################################
-
-streams: ???
-
-# type of zarr_store
-zarr_store: "zip" # "zarr" for LocalStore, "zip" for ZipStore
->>>>>>> 882f4691 (added new stream_directory (config_forecasting_inference) to set max_… (#1949))
 
 general:
 
@@ -49,6 +36,7 @@ training_config:
   training_mode: ["masking"]
 
   num_mini_epochs: 16
+  num_mini_epochs: 32
 
   start_date: 2014-01-01T00:00
   end_date: 2022-12-31T00:00
@@ -70,64 +58,3 @@ training_config:
       offset: 1
       num_steps: 8
       policy: "fixed"
-
-
-# validation config; full validation config is merge of training and validation config
-validation_config: 
-
-  samples_per_mini_epoch: 256
-  shuffle: False
-
-  start_date: 2023-10-01T00:00
-  end_date: 2023-12-31T00:00
-  
-  # whether to track the exponential moving average of weights for validation
-  validate_with_ema: 
-    enabled : True
-    ema_ramp_up_ratio: 0.09
-    ema_halflife_in_thousands: 1e-3
-
-  # parameters for validation samples that are written to disk
-  output : {
-    # number of samples that are written
-    num_samples: 0,
-    # write samples in normalized model space
-    normalized_samples: False,
-    # output streams to write; default all
-    streams: null,
-    }
-
-  # run validation before training starts (mainly for model development)
-  validate_before_training: False
-
-
-# test config; full test config is merge of validation and test config
-# test config is used by default when running inference
-
-# Tags for experiment tracking
-# These tags will be logged in MLFlow along with completed runs for train, eval, val
-# The tags are free-form, with the following rules:
-# - tags should be primitive types (strings, numbers, booleans). NO lists or dictionaries
-# - tags should not duplicate existing config entries.
-# - try to reuse existing tags where possible. MLFlow does not like having too many unique tags
-# - do not use long strings in values (less than 20 characters is a good rule of thumb, we may enforce this in the future)
-wgtags:
-  # The name of the organization of the person running the experiment.
-  # This may be autofilled in the future. Expected values are lowercase strings 
-  # e.g. "ecmwf", "cmcc", "metnor", "jsc", "escience"
-  org: null
-  # The Github issue corresponding to this run (number such as 1234)
-  # Github issues are the central point when running experiment and contain 
-  # links to hedgedocs, code branches, pull requests etc.
-  # It is recommended to associate a run with a Github issue.
-  issue: null
-  # The name of the experiment. This is a distinctive codename for the experiment campaign being run.
-  # This is expected to be the primary tag for comparing experiments in MLFlow, along with the
-  # issue number.
-  # Expected values are lowercase strings with no spaces, just underscores:
-  # Examples: "rollout_ablation_grid"  
-  exp: null
-  # *** Experiment-specific tags ***
-  # All extra tags (including lists, dictionaries, etc.) are treated 
-  # as strings by mlflow, so treat all extra tags as simple string key: value pairs.
-  grid: null
