@@ -340,6 +340,7 @@ def plot_loss_per_stream(
     prop_cycle = plt.rcParams["axes.prop_cycle"]
     colors = prop_cycle.by_key()["color"] + ["r", "g", "b", "k", "m", "y"]
 
+<<<<<<< HEAD
     for err in errs:
         for channel in channels:
             for stream_name in stream_names:
@@ -350,6 +351,18 @@ def plot_loss_per_stream(
                 max_val = 0.0
                 for mode in modes:
                     legend_strs += [[]]
+=======
+    for channel in channels:
+        for stream_name in stream_names:
+            _fig = plt.figure(figsize=(10, 7), dpi=300)
+
+            legend_strs = []
+            min_val = np.finfo(np.float32).max
+            max_val = 0.0
+            for mode in modes:
+                legend_strs += [[]]
+                for err in errs:
+>>>>>>> d44fbd59 (Update train and val plotting)
                     linestyle = "-" if mode == "train" else ("--x" if len(modes) > 1 else "-x")
                     linestyle = ":" if "stddev" in err else linestyle
                     alpha = 1.0
