@@ -141,7 +141,7 @@ class EncoderModule(torch.nn.Module):
 
         if self.cf.latent_noise_kl_weight > 0.0:
             tokens, posteriors = self.interpolator_latents.interpolate_with_noise(
-                tokens, sampling=self.stage
+                tokens, sampling=self.training
             )
         else:
             posteriors = torch.zeros((1,), device=tokens.device)

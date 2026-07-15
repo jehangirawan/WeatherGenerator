@@ -30,6 +30,7 @@ from weathergen.model.embeddings import (
 from weathergen.model.layers import MLP
 from weathergen.model.utils import ActivationFactory
 from weathergen.utils.utils import get_dtype
+from torch.utils.checkpoint import checkpoint
 
 
 class EmbeddingEngine(torch.nn.Module):

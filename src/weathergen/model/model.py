@@ -39,6 +39,7 @@ from weathergen.model.utils import get_num_parameters
 from weathergen.train.utils import get_batch_size_from_config
 from weathergen.utils.distributed import is_root
 from weathergen.utils.utils import get_dtype, is_stream_forcing
+from torch.utils.checkpoint import checkpoint
 
 logger = logging.getLogger(__name__)
 
