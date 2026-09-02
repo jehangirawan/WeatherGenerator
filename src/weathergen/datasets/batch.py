@@ -292,6 +292,10 @@ class ModelBatch:
     source2target_matching_idxs: np.typing.NDArray[np.int32]
     target2source_matching_idxs: np.typing.NDArray[np.int32]
 
+    # per-step forcing field on the latent cells, (num_cells, 2*num_vars) =
+    # [cell values | validity fraction]; empty for steps with no forcing stream
+    forcing: list
+
     # indices of valid outputs
     output_idxs: list[int]
 
@@ -320,6 +324,8 @@ class ModelBatch:
             stream_names, num_target_samples, output_steps, self.output_idxs
         )
 
+        self.forcing = [[] for _ in range(output_steps)]
+
         self.source2target_matching_idxs = np.full(num_source_samples, -1, dtype=np.int32)
         self.target2source_matching_idxs = [[] for _ in range(num_target_samples)]
 
@@ -341,6 +347,9 @@ class ModelBatch:
 
         self.source_samples.to_device(device)
         self.target_samples.to_device(device)
+        self.forcing = [
+            f.to(device) if torch.is_tensor(f) and f.numel() > 0 else f for f in self.forcing
+        ]
 
         self.device = device
 
@@ -449,7 +458,12 @@ class ModelBatch:
         """
         Get source samples
         """
-        return self.source_samples.get_subset(subset)
+        samples = self.source_samples.get_subset(subset)
+        # The prescribed boundary forcing is filled on the parent batch, but the model is
+        # handed this sub-batch, so carry the reference across or the injection silently
+        # sees no field and never trains. to_device() runs first, so these are on device.
+        samples.forcing = self.forcing
+        return samples
 
     def get_target_sample(self, idx: int) -> Sample:
         """

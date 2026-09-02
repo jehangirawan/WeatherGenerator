@@ -33,6 +33,7 @@ from weathergen.datasets.utils import (
     get_tokens_lens,
 )
 from weathergen.readers_extra.registry import get_extra_reader
+from weathergen.model.forcing import build_forcing_cell_index, scatter_to_cells
 from weathergen.train.utils import Stage, get_batch_size_from_config
 from weathergen.utils.distributed import is_root
 
@@ -233,7 +234,8 @@ Set repeat_data_in_mini_epoch to True if this is undesired."
             match stream_info["type"]:
                 case "obs":
                     dataset = DataReaderObs
-                case "anemoi":
+                case "anemoi" | "forcing":
+                    # forcing stores are anemoi-format, so they need no separate reader
                     dataset = DataReaderAnemoi
                 case type_name:
                     dataset = get_extra_reader(type_name)
@@ -276,6 +278,17 @@ Set repeat_data_in_mini_epoch to True if this is undesired."
                 if ds.target_channel_weights is not None
                 else [1.0 for _ in ds.target_channels]
             )
+
+        # forcing streams are not part of the assimilation path: hold them separately so
+        # they stay out of get_sources_size() and the per-stream model lists.
+        self.forcing_datasets = {}
+        for name in [n for n, d in streams_datasets.items() if d.info["type"] == "forcing"]:
+            self.forcing_datasets[name] = streams_datasets.pop(name)
+            if is_root():
+                logger.info(
+                    f"Forcing stream '{name}': scattering onto "
+                    f"{12 * 4**self.healpix_level} latent cells."
+                )
 
         return streams_datasets
 
@@ -649,6 +662,50 @@ Set repeat_data_in_mini_epoch to True if this is undesired."
 
         return batch
 
+    def _fill_forcing(self, batch, base_idx: int, num_output_steps: int) -> None:
+        """
+        Bin the prescribed forcing onto the latent cells for every output step.
+
+        Uses the same step-to-window mapping as the target windows, so the forcing applied
+        before an advance is the one valid at the step being advanced to. Leaves the slot
+        empty when no forcing stream is configured or a step has no data, which the model
+        treats as a no-op.
+        """
+        if not getattr(self, "forcing_datasets", None):
+            return
+        if not hasattr(self, "_forcing_rng"):
+            self._forcing_rng = np.random.default_rng(0)
+        num_cells = 12 * 4**self.healpix_level
+        for stream in self.forcing_datasets.values():
+            num_vars = len(stream.readers[0].source_channels)
+            for timestep_idx in range(self.output_offset, num_output_steps):
+                step_idx = base_idx + (self.time_step * timestep_idx) // self.step_timedelta
+                # dedicated RNG: reading the forcing must not advance the sampler's own
+                # stream, or every draw after it shifts and the ranks stop agreeing on
+                # which samples they see
+                rdata = collect_datasources(
+                    stream.readers, step_idx, "source", self._forcing_rng
+                )
+                if rdata.is_empty():
+                    # Must still emit a field: the injection runs collectives over sharded
+                    # parameters, so every rank has to take the same path. Skipping here
+                    # makes ranks diverge and NCCL hangs on mismatched all-gathers.
+                    batch.forcing[timestep_idx] = torch.zeros(
+                        num_cells, 2 * num_vars, dtype=torch.float32
+                    )
+                    continue
+                values = torch.as_tensor(np.asarray(rdata.data), dtype=torch.float32)
+                if values.ndim == 3:
+                    values = values[0]
+                # index from the coordinates actually returned: the reader drops points
+                # with invalid coords, so a precomputed full-grid index would misalign
+                coords = np.asarray(rdata.coords)
+                cell_idx = build_forcing_cell_index(
+                    coords[:, 0], coords[:, 1], self.healpix_level
+                )
+                cell_values, cell_valid = scatter_to_cells(values, cell_idx, num_cells)
+                batch.forcing[timestep_idx] = torch.cat([cell_values, cell_valid], dim=-1)
+
     def _get_batch(self, idx: int, num_forecast_steps: int):
         """
         Assemble a batch using the sample corresponding to idx
@@ -681,6 +738,10 @@ Set repeat_data_in_mini_epoch to True if this is undesired."
             self.output_offset,
             num_output_steps,
         )
+
+        # prescribed boundary forcing, one field per output step, binned onto the latent
+        # cells here so the model only has to add it
+        self._fill_forcing(batch, idx, num_output_steps)
 
         # for all streams
         for stream_name, stream_data in self.streams_datasets.items():

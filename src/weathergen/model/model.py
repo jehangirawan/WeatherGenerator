@@ -37,10 +37,11 @@ from weathergen.model.engines import (
     TargetPredictionEngine,
     TargetPredictionEngineClassic,
 )
+from weathergen.model.forcing import ForcingInjection
 from weathergen.model.layers import MLP, NamedLinear
 from weathergen.model.utils import get_num_parameters
 from weathergen.utils.distributed import is_root
-from weathergen.utils.utils import get_dtype, is_stream_forcing
+from weathergen.utils.utils import get_dtype, is_stream_assimilated, is_stream_forcing
 
 logger = logging.getLogger(__name__)
 
@@ -327,7 +328,12 @@ class Model(torch.nn.Module):
         self.forecast_engine: ForecastingEngine | IdentityEngine | None = None
         self.pred_heads = None
         self.q_cells: torch.Tensor | None = None
-        self.streams: dict[str, typing.Any] = cf.streams
+        # forcing streams feed the forecasting engine directly, so they get no encoder,
+        # embed, decoder or output entry; this keeps self.streams aligned with the
+        # sampler's get_sources_size(), which omits them too.
+        self.streams: dict[str, typing.Any] = {
+            name: si for name, si in cf.streams.items() if is_stream_assimilated(si)
+        }
         self.target_token_engines = None
 
         assert cf.get("forecast", {}).get("att_dense_rate", 1.0) == 1.0, (
@@ -382,6 +388,24 @@ class Model(torch.nn.Module):
             self.forecast_engine = ForecastingEngine(cf, mode_cfg, self.num_healpix_cells)
         else:
             self.forecast_engine = IdentityEngine()
+
+        # per-step boundary forcing injected into the forecasting engine; None unless a
+        # stream asks for it. Only one forcing stream is supported.
+        self.forcing_module = None
+        for stream_cfg in cf.streams.values():
+            if stream_cfg.get("type") != "forcing":
+                continue
+            mode = stream_cfg.get("injection", {}).get("mode", "none")
+            if mode == "none":
+                continue
+            channels = stream_cfg.get("train_source_channels") or stream_cfg.get(
+                "val_source_channels", []
+            )
+            # dim_embed matches the FE token dim so the injection is a plain sum
+            self.forcing_module = ForcingInjection(
+                num_vars=len(channels), dim_embed=cf.ae_global_dim_embed, mode=mode
+            )
+            break
 
         # embed coordinates yielding one query token for each target token
         dropout_rate = cf.embed_dropout_rate
@@ -695,9 +719,17 @@ class Model(torch.nn.Module):
         # roll-out in latent space, iterate and generate output over requested output steps
         for step in batch.get_output_idxs():
             without_grad = p_fwd and self.training and step != max(batch.get_output_idxs())
+            # Re-apply the prescribed boundary condition before advancing. Must not be
+            # skipped on some ranks only: the embedding is sharded and the all-gathers
+            # would desynchronise.
+            if self.forcing_module is not None:
+                forcing = getattr(batch, "forcing", None)
+                field = forcing[step] if forcing is not None and step < len(forcing) else None
+                tokens, _ = self.forcing_module(tokens, None, field, self.num_aux_tokens)
             if without_grad:
-                # Pushforward mode: advance tokens without grad; no decoding with torch.no_grad():
-                tokens = self.forecast_engine(tokens, step, model_params.rope_coords)
+                # Pushforward mode: advance tokens without grad; no decoding
+                with torch.no_grad():
+                    tokens = self.forecast_engine(tokens, step, model_params.rope_coords)
                 continue
 
             tokens = self.forecast_engine(tokens, step, model_params.rope_coords)
