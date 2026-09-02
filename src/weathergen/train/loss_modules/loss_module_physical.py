@@ -20,6 +20,7 @@ from omegaconf import DictConfig
 import weathergen.train.loss_modules.loss_functions as loss_fns
 from weathergen.train.loss_modules.loss_module_base import LossModuleBase, LossValues
 from weathergen.train.utils import TRAIN, VAL, Stage
+from weathergen.utils.utils import is_stream_assimilated
 
 _logger = logging.getLogger(__name__)
 
@@ -282,6 +283,10 @@ class LossPhysical(LossModuleBase):
 
         # TODO: iterate over batch dimension
         for stream_name, stream_info in self.cf.streams.items():
+            # streams that feed the forecasting engine directly produce no physical
+            # predictions, so there is nothing to score them against
+            if not is_stream_assimilated(stream_info):
+                continue
             # TODO: avoid this
             target_channels = (
                 stream_info.val_target_channels

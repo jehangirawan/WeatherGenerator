@@ -29,6 +29,17 @@ def get_dtype(value: str) -> torch.dtype:
         )
 
 
+def is_stream_assimilated(stream_cfg: dict) -> bool:
+    """
+    Determine if a stream is assimilated, i.e. goes through embedding and the encoder.
+    Streams that are not feed the forecasting engine directly and are excluded from the
+    per-stream embed, encoder, decoder and output lists, which stay aligned with
+    `get_sources_size()`. Distinct from `is_stream_forcing`, which is about whether a
+    stream produces predictions, not about how it enters the model.
+    """
+    return stream_cfg.get("type") not in ("condition", "forcing")
+
+
 def is_stream_forcing(stream_cfg: dict, stage: Stage | None = None) -> bool:
     """
     Determine if stream is forcing, i.e. does not produce (physical) predictions

@@ -25,6 +25,7 @@ from weathergen.model.engines import (
 # from weathergen.model.model import ModelParams
 from weathergen.model.parametrised_prob_dist import LatentInterpolator
 from weathergen.model.positional_encoding import positional_encoding_harmonic
+from weathergen.utils.utils import is_stream_assimilated
 
 
 class EncoderModule(torch.nn.Module):
@@ -58,7 +59,11 @@ class EncoderModule(torch.nn.Module):
 
         # embedding engine
         # determine stream names once so downstream components use consistent keys
-        self.stream_names = list(cf.streams.keys())
+        # aligned with sources_size, which omits streams that feed the forecasting
+        # engine directly
+        self.stream_names = [
+            name for name, si in cf.streams.items() if is_stream_assimilated(si)
+        ]
         # separate embedding networks for differnt observation types
         self.embed_engine = EmbeddingEngine(cf, self.sources_size)
 

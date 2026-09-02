@@ -16,7 +16,7 @@ from weathergen.model.attention import (
 )
 from weathergen.model.layers import MLP
 from weathergen.model.norms import AdaLayerNormLayer
-from weathergen.utils.utils import get_dtype
+from weathergen.utils.utils import get_dtype, is_stream_assimilated
 
 
 class SelfAttentionBlock(nn.Module):
@@ -201,7 +201,11 @@ class OriginalPredictionBlock(nn.Module):
 
         self.block = nn.ModuleList()
 
-        target_readout_num_heads = next(self.cf.streams.values())["target_readout"]["num_heads"]
+        # take the head count from the first stream that actually decodes targets;
+        # forcing/condition streams feed the forecasting engine and define no target_readout
+        target_readout_num_heads = next(
+            s for s in self.cf.streams.values() if is_stream_assimilated(s)
+        )["target_readout"]["num_heads"]
 
         # Multi-Cross Attention Head
         self.block.append(

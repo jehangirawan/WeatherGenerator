@@ -30,7 +30,7 @@ from weathergen.model.embeddings import (
 )
 from weathergen.model.layers import MLP
 from weathergen.model.utils import ActivationFactory
-from weathergen.utils.utils import get_dtype
+from weathergen.utils.utils import get_dtype, is_stream_assimilated
 
 
 class EmbeddingEngine(torch.nn.Module):
@@ -48,7 +48,11 @@ class EmbeddingEngine(torch.nn.Module):
         self.dtype = get_dtype(self.cf.mixed_precision_dtype)
         self.sources_size = sources_size  # KCT:iss130, what is this?
         self.embeds = torch.nn.ModuleDict()
-        self.streams = cf.streams
+        # forcing streams feed the forecasting engine directly and get no embedding, so
+        # this must match the sampler's get_sources_size(), which omits them
+        self.streams = {
+            name: si for name, si in cf.streams.items() if is_stream_assimilated(si)
+        }
 
         for i, (stream_name, si) in enumerate(self.streams.items()):
             if si.get("diagnostic", False) or self.sources_size[i] == 0:
