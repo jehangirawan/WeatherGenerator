@@ -19,9 +19,12 @@ import time
 import traceback
 from pathlib import Path
 
+import torch
 import weathergen.common.config as config
-import weathergen.utils.cli as cli
+from omegaconf import OmegaConf
 from weathergen.common.logger import init_loggers
+
+import weathergen.utils.cli as cli
 from weathergen.train.trainer import Trainer
 
 logger = logging.getLogger(__name__)
@@ -169,7 +172,17 @@ def run_train(args):
     )
     cf = config.set_run_id(cf, args.run_id, False)
 
-    cf.data_loading.rng_seed = int(time.time())
+    # Only auto-seed when the user has not supplied one. Unconditionally assigning
+    # here silently overrides `--options data_loading.rng_seed=N`, which makes runs
+    # irreproducible and makes seed-controlled A/B comparisons impossible.
+    if OmegaConf.is_missing(cf.data_loading, "rng_seed") or cf.data_loading.rng_seed is None:
+        cf.data_loading.rng_seed = int(time.time())
+        _seed_source = "auto (wall clock)"
+    else:
+        _seed_source = "user-specified"
+    # identical on every rank: nothing broadcasts rank 0's initial weights
+    torch.manual_seed(cf.data_loading.rng_seed)
+    logger.info("rng_seed = %d (%s)", cf.data_loading.rng_seed, _seed_source)
     mp_method = cf.general.get("multiprocessing_method", "fork")
     devices = Trainer.init_torch(multiprocessing_method=mp_method)
     cf = Trainer.init_ddp(cf)

@@ -243,9 +243,62 @@ class Trainer(TrainerBase):
 
         logger.info(f"Starting inference with id={self.cf.general.run_id}.")
 
-        # inference validation set
-        self.validate(0, self.test_cfg, self.batch_size_test_per_gpu)
+        # AMIP free-running rollout instead of the scored-forecast validation path.
+        # Gated on a config key so --options rollout_mode=amip reaches it through the
+        # existing launch scripts with no CLI change.
+        if str(cf.get("rollout_mode", "")).lower() == "amip":
+            self.amip_rollout(cf)
+        else:
+            # inference validation set
+            self.validate(0, self.test_cfg, self.batch_size_test_per_gpu)
         logger.info(f"Finished inference run with id: {cf.general.run_id}")
+
+    def amip_rollout(self, cf):
+        """Multi-year free-running AMIP rollout.
+
+        Unlike `validate`, this does NOT read atmospheric truth at each step: the
+        fed-back stream supplies its own next input, while every other stream is re-read
+        from the dataset. Runs on rank 0 only -- the rollout is inherently sequential,
+        so there is nothing to shard.
+
+        Config (all under `rollout:`, settable via `--options rollout.<key>=<value>`):
+          start / end       rollout window   (default: test_config.start_date/end_date)
+          output            zarr path        (default: ./amip_<run_id>.zarr)
+          num_steps         forecast steps per model call
+          checkpoint_every  steps between state checkpoints (default 200)
+          resume            append to an existing output zarr instead of overwriting
+          feedback_stream   stream fed back on itself   (default: ERA5)
+        """
+        from pathlib import Path
+
+        from weathergen.rollout import AMIPRollout
+
+        if not is_root():
+            logger.info("amip_rollout: non-root rank idle (rollout is sequential).")
+            return
+
+        rc = cf.get("rollout", {})
+        start = np.datetime64(str(rc.get("start", self.test_cfg.start_date)))
+        end = np.datetime64(str(rc.get("end", self.test_cfg.end_date)))
+        out = Path(rc.get("output", f"amip_{cf.general.run_id}.zarr"))
+
+        rollout = AMIPRollout(
+            model=self.model,
+            model_params=self.model_params,
+            sampler=self.dataset,
+            cf=cf,
+            feedback_stream=str(rc.get("feedback_stream", "ERA5")),
+            device=self.devices[0],
+        )
+        logger.info("AMIP rollout %s -> %s, writing %s", start, end, out)
+        rollout.run(
+            start,
+            end,
+            out,
+            checkpoint_every=int(rc.get("checkpoint_every", 200)),
+            resume=bool(rc.get("resume", False)),
+        )
+
 
     def run(self, cf, devices, run_id_contd=None, mini_epoch_contd=None):
         # general initalization
@@ -662,7 +715,13 @@ class Trainer(TrainerBase):
         if self.cf.with_ddp and self.cf.with_fsdp:
             cpu_state_dict = {}
             for param_name, sharded_param in maybe_sharded_sd.items():
-                full_param = sharded_param.full_tensor()
+                # state_dict() yields buffers as well as parameters, and fully_shard
+                # shards only parameters: buffers stay replicated tensors with no
+                # .full_tensor(). Take those as-is; they are identical on every rank.
+                if isinstance(sharded_param, DTensor):
+                    full_param = sharded_param.full_tensor()
+                else:
+                    full_param = sharded_param
                 if is_root():
                     cpu_state_dict[param_name] = full_param.cpu()
                 else:
