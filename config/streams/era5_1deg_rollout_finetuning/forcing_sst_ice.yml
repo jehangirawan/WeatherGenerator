@@ -1,0 +1,31 @@
+# (C) Copyright 2025 WeatherGenerator contributors.
+#
+# This software is licensed under the terms of the Apache Licence Version 2.0
+# which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
+#
+# In applying this licence, ECMWF does not waive the privileges and immunities
+# granted to it by virtue of its status as an intergovernmental organisation
+# nor does it submit to any jurisdiction.
+
+ERA5_FORCING :
+  type : forcing
+  stream_id : 1
+  filenames : ['/e/data1/climateai/hclimrep/data/aimip_forcing/ERA5-o96-AIMIP-DAILY-sst-ice-anom-tend-1979-2024.zarr']
+  train_source_channels : ['sst', 'ci', 'sst_anom', 'sst_tend_0_3']
+  val_source_channels   : ['sst', 'ci', 'sst_anom', 'sst_tend_0_3']
+  train_target_channels : []
+  val_target_channels   : []
+  geoinfo_channels : []
+  loss_weight : 0.0
+  location_weight : cosine_latitude
+  token_size : 8
+  tokenize_spacetime : True
+  frequency : 24h
+  injection :
+    mode : additive   # none | additive
+  embed :
+    net : transformer
+    num_tokens : 1
+    num_heads : 8
+    dim_embed : 2048
+    num_blocks : 2

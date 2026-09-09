@@ -1,0 +1,42 @@
+# (C) Copyright 2025 WeatherGenerator contributors.
+#
+# This software is licensed under the terms of the Apache Licence Version 2.0
+# which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
+#
+# In applying this licence, ECMWF does not waive the privileges and immunities
+# granted to it by virtue of its status as an intergovernmental organisation
+# nor does it submit to any jurisdiction.
+
+# Rollout finetuning, phase 2. Warm start from a phase-1 run: pass this with
+# --config, which overlays the parent run's saved configuration. This file
+# deliberately carries no architecture keys, so the model stays identical to the
+# checkpoint it continues.
+#
+# Launching it WITHOUT a phase-1 parent falls back to default_config.yml, whose
+# architecture differs: ae_global_num_blocks 2 rather than 8, and fe_num_blocks 6
+# rather than 16. The model builds and trains either way, so the mismatch is
+# silent and the resulting weights will not load against a phase-1 checkpoint.
+#
+# To start a new LR schedule rather than inheriting the parent's step count, pass
+# --options general.istep=0 on that launch only; a resume needs no override.
+
+streams_directory: "./config/streams/era5_1deg_rollout_finetuning/"
+
+training_config:
+  num_mini_epochs: 64
+  samples_per_mini_epoch: 2048
+  start_date: '1979-01-01T00:00'
+  end_date: '2014-12-31T00:00'
+  time_window_len: 86400
+  time_window_step: 86400
+  forecast:
+    time_step: 86400
+    num_steps: 8
+    offset: 1
+    policy: fixed
+    pushforward: True
+
+validation_config:
+  samples_per_mini_epoch: 512
+  start_date: '2014-01-01T00:00'
+  end_date: '2014-12-31T00:00'

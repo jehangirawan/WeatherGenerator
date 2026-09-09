@@ -1,0 +1,43 @@
+# (C) Copyright 2025 WeatherGenerator contributors.
+#
+# This software is licensed under the terms of the Apache Licence Version 2.0
+# which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
+#
+# In applying this licence, ECMWF does not waive the privileges and immunities
+# granted to it by virtue of its status as an intergovernmental organisation
+# nor does it submit to any jurisdiction.
+
+# sst and ci are undefined over land (28.7% of cells). masking_rate 0 and the
+# explicit target_exclude keep those NaNs out of the tokenised stream.
+ERA5_FORCING :
+  type : anemoi
+  forcing : True
+  stream_id : 1
+  filenames : ['/e/data1/climateai/hclimrep/data/aimip_forcing/ERA5-o96-AIMIP-DAILY-sst-ice-1979-2024.zarr']
+  source : ['sst', 'ci']
+  target : []
+  target_exclude : ['sst', 'ci']
+  target_channel_weights : []
+  loss_weight : 0.0
+  location_weight : cosine_latitude
+  masking_rate : 0.0
+  masking_rate_none : 0.0
+  token_size : 8
+  tokenize_spacetime : True
+  frequency : 24h
+  embed :
+    net : transformer
+    num_tokens : 1
+    num_heads : 8
+    dim_embed : 256
+    num_blocks : 2
+  embed_target_coords :
+    net : linear
+    dim_embed : 256
+  target_readout :
+    type : obs_value
+    num_layers : 2
+    num_heads : 4
+  pred_head :
+    ens_size : 1
+    num_layers : 1
