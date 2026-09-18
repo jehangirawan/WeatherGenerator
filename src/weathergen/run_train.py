@@ -100,6 +100,14 @@ def run_inference(args):
     )
     cf = config.set_run_id(cf, args.run_id, args.reuse_run_id)
 
+    # Seed inference too. Without this the torch RNG differs between runs, and since
+    # sampling and, until eval() is set, dropout both draw from it, the same rollout
+    # configuration produces a different trajectory every time.
+    seed = cf.get("data_loading", {}).get("rng_seed", None)
+    if seed is not None and not OmegaConf.is_missing(cf.data_loading, "rng_seed"):
+        torch.manual_seed(int(seed))
+        logger.info("inference rng_seed = %d", int(seed))
+
     devices = Trainer.init_torch()
     cf = Trainer.init_ddp(cf)
 

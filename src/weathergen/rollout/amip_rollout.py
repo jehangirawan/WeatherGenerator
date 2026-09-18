@@ -234,6 +234,13 @@ class AMIPRollout:
         if getattr(self.sampler, "rng", None) is None:
             self.sampler.rng = np.random.default_rng(self.sampler.data_loader_rng_seed)
 
+        # The inference entry point never calls eval(): model.eval() lives inside
+        # validate(), which the rollout path bypasses. Left in training mode the model
+        # applies dropout in every block and ForecastingEngine adds
+        # fe_impute_latent_noise_std noise to the latent, so a rollout is a random draw
+        # and re-running the same configuration gives a different trajectory.
+        self.model.eval()
+
         self.injector = self._install_injector()
         self.state: RolloutState | None = None
         logger.info(
