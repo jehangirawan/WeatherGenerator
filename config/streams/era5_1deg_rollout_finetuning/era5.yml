@@ -10,15 +10,14 @@
 # what differs between the two phases is the forcing stream beside it, which moves
 # from assimilation to per-step re-injection.
 #
-# The 'dataset' paths are site-specific -- adjust for your system.
 
 ERA5 :
   type : anemoi
   stream_id : 0
   anemoi_config :
     join :
-      - dataset : /e/data1/climateai/hclimrep/data/aimip_forcing/ERA5-o96-DAILYMEAN-atmos-1979-2024-era51.zarr
-      - dataset : /e/data1/climateai/hclimrep/data/aimip_forcing/ERA5-o96-TRENDCLIM-1979-2014train-1979-2024.zarr
+      - dataset : ERA5-o96-DAILYMEAN-atmos-1979-2024-era51
+      - dataset : ERA5-o96-TRENDCLIM-1979-2014train-1979-2024
   frequency : 24h
   source_exclude : ['w_', 'tcw', 'cp', 'tp', '2t_clim', 'tcc', 'hcc', 'mcc', 'lcc', 'ssrd', 'strd', 'q_10', 't_10', 'u_10', 'v_10', 'w_10', 'z_10']
   target_exclude : ['w_', 'slor', 'sdor', 'tcw', 'cp', '2t_clim', 'tcc', 'hcc', 'mcc', 'lcc', 'ssrd', 'strd', 'q_10', 't_10', 'u_10', 'v_10', 'w_10', 'z_10']

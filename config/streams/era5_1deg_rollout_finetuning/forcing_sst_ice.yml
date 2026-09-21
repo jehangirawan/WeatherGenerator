@@ -10,7 +10,7 @@
 ERA5_FORCING :
   type : forcing
   stream_id : 1
-  filenames : ['/e/data1/climateai/hclimrep/data/aimip_forcing/ERA5-o96-AIMIP-DAILY-sst-ice-anom-tend-1979-2024.zarr']
+  filenames : ['ERA5-o96-AIMIP-DAILY-sst-ice-anom-tend-1979-2024.zarr']
   train_source_channels : ['sst', 'ci', 'sst_anom', 'sst_tend_0_3']
   val_source_channels   : ['sst', 'ci', 'sst_anom', 'sst_tend_0_3']
   train_target_channels : []

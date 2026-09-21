@@ -9,11 +9,12 @@
 
 # sst and ci are undefined over land (28.7% of cells). masking_rate 0 and the
 # explicit target_exclude keep those NaNs out of the tokenised stream.
+
 ERA5_FORCING :
   type : anemoi
   forcing : True
   stream_id : 1
-  filenames : ['/e/data1/climateai/hclimrep/data/aimip_forcing/ERA5-o96-AIMIP-DAILY-sst-ice-1979-2024.zarr']
+  filenames : ['ERA5-o96-AIMIP-DAILY-sst-ice-1979-2024.zarr']
   source : ['sst', 'ci']
   target : []
   target_exclude : ['sst', 'ci']
